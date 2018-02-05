@@ -164,7 +164,7 @@ static int gif_image_write_opaque(AVCodecContext *avctx,
     uint8_t *frame_disposal = av_packet_new_side_data(pkt, AV_PKT_DATA_GIF_FRAME_DISPOSAL, 1);
     if (!frame_disposal)
         return AVERROR(ENOMEM);
-    *frame_disposal = GCE_DISPOSAL_INPLACE;
+    *frame_disposal = GCE_DISPOSAL_BACKGROUND;
 
     /* image block */
     bytestream_put_byte(bytestream, GIF_IMAGE_SEPARATOR);
@@ -266,62 +266,50 @@ static int gif_image_write_translucent(AVCodecContext *avctx,
         // crop top
         while (y_start < y_end) {
             int i;
-            int is_trans = 1;
             for (i=0; i<w; ++i) {
-                if( buf[w*y_start+i] != trans ) {
-                    is_trans = 0;
-                    break;
+                if( buf[linesize*y_start+i] != trans ) {
+                    goto DONE_CROP_TOP;
                 }
             }
-            if (!is_trans)
-                break;
-            y_start++;
+            ++y_start;
         }
+  DONE_CROP_TOP:
 
         // crop bottom
         while (y_end < h) {
             int i;
-            int is_trans = 1;
             for (i=0; i<w; ++i) {
-                if (buf[w*y_end+i] != trans) {
-                    is_trans = 0;
-                    break;
+                if (buf[linesize*y_end+i] != trans) {
+                    goto DONE_CROP_BOTTOM;
                 }
             }
-            if (!is_trans)
-                break;
             y_end--;
         }
+  DONE_CROP_BOTTOM:
 
         // crop left
         while (x_start < x_end) {
             int i;
-            int is_trans = 1;
             for (i=y_start; i<y_end; ++i) {
-                if (buf[w*i+x_start] != trans) {
-                    is_trans = 0;
-                    break;
+                if (buf[linesize*i+x_start] != trans) {
+                    goto DONE_CROP_LEFT;
                 }
             }
-            if (!is_trans)
-                break;
             x_start++;
         }
+  DONE_CROP_LEFT:
 
         // crop right
         while (x_end < w) {
             int i;
-            int is_trans = 1;
             for (i=y_start; i<y_end; ++i) {
-                if (buf[w*i+x_end] != trans) {
-                    is_trans = 0;
-                    break;
+                if (buf[linesize*i+x_end] != trans) {
+                    goto DONE_CROP_RIGHT;
                 }
             }
-            if (!is_trans)
-                break;
             x_end--;
         }
+  DONE_CROP_RIGHT:
 
         height = y_end + 1 - y_start;
         width  = x_end + 1 - x_start;
@@ -358,7 +346,7 @@ static int gif_image_write_translucent(AVCodecContext *avctx,
     ff_lzw_encode_init(s->lzw, s->buf, s->buf_size,
                        12, FF_LZW_GIF, put_bits);
 
-    ptr = buf + y_start*linesize + x_start;
+    ptr = buf + y_start*(linesize) + x_start;
 
     for (y = 0; y < height; y++) {
         len += ff_lzw_encode(s->lzw, ptr, width);

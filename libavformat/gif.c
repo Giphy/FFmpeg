@@ -172,9 +172,9 @@ static int flush_packet(AVFormatContext *s, AVPacket *new)
 
     /* graphic control extension block */
     if (disposal) {
-        packed = (0xff & (*disposal)<<2) | (bcid >= 0);
+        packed = (0xff & (*disposal)<<2) | (bcid >= 0 ? 1 : 0);
     } else {
-        packed = 1<<2 | (bcid >= 0);
+        packed = 1<<2 | (bcid >= 0 ? 1 : 0);
     }
 
     avio_w8(pb, 0x21);
