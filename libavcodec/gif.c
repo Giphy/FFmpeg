@@ -97,12 +97,14 @@ static int is_image_translucent(AVCodecContext *avctx,
 }
 
 // writes an opaque image. ie an image with no transparency.
-// it also works, and should be used, for a first image.
+// it also works, for a first image even with transpareny,
+// in which case is_translucent should be set.
 static int gif_image_write_opaque(AVCodecContext *avctx,
                                   uint8_t **bytestream, uint8_t *end,
                                   const uint32_t *palette,
                                   const uint8_t *buf, const int linesize,
-                                  AVPacket *pkt)
+                                  AVPacket *pkt,
+                                  const int is_translucent )
 {
     GIFContext *s = avctx->priv_data;
     int len = 0, height = avctx->height, width = avctx->width, x, y;
@@ -161,10 +163,34 @@ static int gif_image_write_opaque(AVCodecContext *avctx,
                width, height, x_start, y_start, avctx->width, avctx->height);
     }
 
+    if (trans < 0) {
+       honor_transparency = 0;
+    }
+    if (honor_transparency && trans < 0) {
+        trans = pick_palette_entry(buf + y_start*linesize + x_start,
+                                   linesize, width, height);
+        if (trans < 0) { // TODO, patch welcome
+            av_log(avctx, AV_LOG_DEBUG, "No available color, can not use transparency\n");
+        } else {
+            uint8_t *pal_exdata = s->pal_exdata;
+            if (!pal_exdata)
+                pal_exdata = av_packet_new_side_data(pkt, AV_PKT_DATA_PALETTE, AVPALETTE_SIZE);
+            if (!pal_exdata)
+                return AVERROR(ENOMEM);
+            memcpy(pal_exdata, s->palette, AVPALETTE_SIZE);
+            pal_exdata[trans*4 + 3*!HAVE_BIGENDIAN] = 0x00;
+        }
+    }
+
     uint8_t *frame_disposal = av_packet_new_side_data(pkt, AV_PKT_DATA_GIF_FRAME_DISPOSAL, 1);
     if (!frame_disposal)
         return AVERROR(ENOMEM);
-    *frame_disposal = GCE_DISPOSAL_BACKGROUND;
+    *frame_disposal = GCE_DISPOSAL_NONE ;
+    if( honor_transparency )
+        *frame_disposal = GCE_DISPOSAL_INPLACE;
+    if( is_translucent )
+        *frame_disposal = GCE_DISPOSAL_BACKGROUND;
+
 
     /* image block */
     bytestream_put_byte(bytestream, GIF_IMAGE_SEPARATOR);
@@ -184,30 +210,13 @@ static int gif_image_write_opaque(AVCodecContext *avctx,
         }
     }
 
-    if (honor_transparency && trans < 0) {
-        trans = pick_palette_entry(buf + y_start*linesize + x_start,
-                                   linesize, width, height);
-        if (trans < 0) { // TODO, patch welcome
-            av_log(avctx, AV_LOG_DEBUG, "No available color, can not use transparency\n");
-        } else {
-            uint8_t *pal_exdata = s->pal_exdata;
-            if (!pal_exdata)
-                pal_exdata = av_packet_new_side_data(pkt, AV_PKT_DATA_PALETTE, AVPALETTE_SIZE);
-            if (!pal_exdata)
-                return AVERROR(ENOMEM);
-            memcpy(pal_exdata, s->palette, AVPALETTE_SIZE);
-            pal_exdata[trans*4 + 3*!HAVE_BIGENDIAN] = 0x00;
-        }
-    }
-    if (trans < 0)
-        honor_transparency = 0;
-
     bytestream_put_byte(bytestream, 0x08);
 
     ff_lzw_encode_init(s->lzw, s->buf, s->buf_size,
                        12, FF_LZW_GIF, put_bits);
 
     ptr = buf + y_start*linesize + x_start;
+
     if (honor_transparency) {
         const int ref_linesize = s->last_frame->linesize[0];
         const uint8_t *ref = s->last_frame->data[0] + y_start*ref_linesize + x_start;
@@ -377,14 +386,18 @@ static int gif_image_write_image(AVCodecContext *avctx,
                                  AVPacket *pkt)
 {
     GIFContext *s = avctx->priv_data;
-    if (!s->last_frame) {
-        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt);
+
+    int first_frame = s->last_frame == NULL;
+    int is_translucent = is_image_translucent(avctx, palette, buf, linesize);
+
+    if (first_frame) {
+        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt, is_translucent);
     }
 
-    if (is_image_translucent(avctx, palette, buf, linesize)) {
+    if (is_translucent) {
         return gif_image_write_translucent(avctx, bytestream, end, palette, buf, linesize, pkt);
     } else {
-        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt);
+        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt, is_translucent);
     }
 }
 
