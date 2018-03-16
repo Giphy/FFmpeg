@@ -347,6 +347,7 @@ static int gif_image_write_image(AVCodecContext *avctx,
                        12, FF_LZW_GIF, put_bits);
 
     ptr = buf + y_start*linesize + x_start;
+
     if (honor_transparency) {
         const int ref_linesize = s->last_frame->linesize[0];
         const uint8_t *ref = s->last_frame->data[0] + y_start*ref_linesize + x_start;
@@ -516,14 +517,18 @@ static int gif_image_write_image(AVCodecContext *avctx,
                                  AVPacket *pkt)
 {
     GIFContext *s = avctx->priv_data;
-    if (!s->last_frame) {
-        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt);
+
+    int first_frame = s->last_frame == NULL;
+    int is_translucent = is_image_translucent(avctx, palette, buf, linesize);
+
+    if (first_frame) {
+        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt, is_translucent);
     }
 
-    if (is_image_translucent(avctx, palette, buf, linesize)) {
+    if (is_translucent) {
         return gif_image_write_translucent(avctx, bytestream, end, palette, buf, linesize, pkt);
     } else {
-        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt);
+        return gif_image_write_opaque(avctx, bytestream, end, palette, buf, linesize, pkt, is_translucent);
     }
 }
 
