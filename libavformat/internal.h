@@ -696,4 +696,18 @@ int ff_interleaved_peek(AVFormatContext *s, int stream,
 int ff_lock_avformat(void);
 int ff_unlock_avformat(void);
 
+/**
+ * Set AVFormatContext url field to the provided pointer. The pointer must
+ * point to a valid string. The existing url field is freed if necessary. Also
+ * set the legacy filename field to the same string which was provided in url.
+ */
+void ff_format_set_url(AVFormatContext *s, char *url);
+
+#if FF_API_NEXT
+/**
+  * Register devices in deprecated format linked list.
+  */
+void avpriv_register_devices(const AVOutputFormat * const o[], const AVInputFormat * const i[]);
+#endif
+
 #endif /* AVFORMAT_INTERNAL_H */

@@ -568,6 +568,12 @@ add_suffix(){
     for v; do echo ${v}${suffix}; done
 }
 
+remove_suffix(){
+    suffix=$1
+    shift
+    for v; do echo ${v%$suffix}; done
+}
+
 set_all(){
     value=$1
     shift
@@ -1526,6 +1532,7 @@ EXAMPLE_LIST="
     transcode_aac_example
     transcoding_example
     vaapi_encode_example
+    vaapi_transcode_example
 "
 
 EXTERNAL_AUTODETECT_LIBRARY_LIST="
@@ -3204,6 +3211,7 @@ deconvolve_filter_select="fft"
 deinterlace_qsv_filter_deps="libmfx"
 deinterlace_vaapi_filter_deps="vaapi"
 delogo_filter_deps="gpl"
+denoise_vaapi_filter_deps="vaapi VAProcPipelineParameterBuffer"
 deshake_filter_select="pixelutils"
 drawtext_filter_deps="libfreetype"
 drawtext_filter_suggest="libfontconfig libfribidi"
@@ -3245,6 +3253,7 @@ perspective_filter_deps="gpl"
 phase_filter_deps="gpl"
 pp7_filter_deps="gpl"
 pp_filter_deps="gpl postproc"
+procamp_vaapi_filter_deps="vaapi VAProcPipelineParameterBuffer"
 program_opencl_filter_deps="opencl"
 pullup_filter_deps="gpl"
 removelogo_filter_deps="avcodec avformat swscale"
@@ -3256,6 +3265,7 @@ scale2ref_filter_deps="swscale"
 scale_filter_deps="swscale"
 scale_qsv_filter_deps="libmfx"
 select_filter_select="pixelutils"
+sharpness_vaapi_filter_deps="vaapi VAProcPipelineParameterBuffer"
 showcqt_filter_deps="avcodec avformat swscale"
 showcqt_filter_suggest="libfontconfig libfreetype"
 showcqt_filter_select="fft"
@@ -3316,7 +3326,8 @@ resampling_audio_example_deps="avutil swresample"
 scaling_video_example_deps="avutil swscale"
 transcode_aac_example_deps="avcodec avformat swresample"
 transcoding_example_deps="avfilter avcodec avformat avutil"
-vaapi_encode_example_deps="avcodec avutil"
+vaapi_encode_example_deps="avcodec avutil h264_vaapi_encoder"
+vaapi_transcode_example_deps="avcodec avformat avutil h264_vaapi_encoder"
 
 # EXTRALIBS_LIST
 cpu_init_extralibs="pthreads_extralibs"
@@ -3520,22 +3531,27 @@ find_things(){
     sed -n "s/^[^#]*$pattern.*([^,]*, *\([^,]*\)\(,.*\)*).*/\1_$thing/p" "$file"
 }
 
-ENCODER_LIST=$(find_things  encoder  ENC      libavcodec/allcodecs.c)
-DECODER_LIST=$(find_things  decoder  DEC      libavcodec/allcodecs.c)
-PARSER_LIST=$(find_things   parser   PARSER   libavcodec/allcodecs.c)
-MUXER_LIST=$(find_things    muxer    _MUX     libavformat/allformats.c)
-DEMUXER_LIST=$(find_things  demuxer  DEMUX    libavformat/allformats.c)
-OUTDEV_LIST=$(find_things   outdev   OUTDEV   libavdevice/alldevices.c)
-INDEV_LIST=$(find_things    indev    _IN      libavdevice/alldevices.c)
 FILTER_LIST=$(find_things   filter   FILTER   libavfilter/allfilters.c)
 
 find_things_extern(){
     thing=$1
     pattern=$2
     file=$source_path/$3
-    sed -n "s/^[^#]*extern.*$pattern *ff_\([^ ]*\)_$thing;/\1_$thing/p" "$file"
+    out=${4:-$thing}
+    sed -n "s/^[^#]*extern.*$pattern *ff_\([^ ]*\)_$thing;/\1_$out/p" "$file"
 }
 
+OUTDEV_LIST=$(find_things_extern muxer AVOutputFormat libavdevice/alldevices.c outdev)
+INDEV_LIST=$(find_things_extern demuxer AVInputFormat libavdevice/alldevices.c indev)
+MUXER_LIST=$(find_things_extern muxer AVOutputFormat libavformat/allformats.c)
+DEMUXER_LIST=$(find_things_extern demuxer AVInputFormat libavformat/allformats.c)
+ENCODER_LIST=$(find_things_extern encoder AVCodec libavcodec/allcodecs.c)
+DECODER_LIST=$(find_things_extern decoder AVCodec libavcodec/allcodecs.c)
+CODEC_LIST="
+    $ENCODER_LIST
+    $DECODER_LIST
+"
+PARSER_LIST=$(find_things_extern parser AVCodecParser libavcodec/parser.c)
 BSF_LIST=$(find_things_extern bsf AVBitStreamFilter libavcodec/bitstream_filters.c)
 HWACCEL_LIST=$(find_things_extern hwaccel AVHWAccel libavcodec/hwaccels.h)
 PROTOCOL_LIST=$(find_things_extern protocol URLProtocol libavformat/protocols.c)
@@ -4286,7 +4302,7 @@ probe_cc(){
         _ld_path='-libpath:'
     elif $_cc -nologo- 2>&1 | grep -q Microsoft; then
         _type=msvc
-        _ident=$($_cc 2>&1 | head -n1)
+        _ident=$($_cc 2>&1 | head -n1 | tr -d '\r')
         _DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< 2>&1 | awk '\''/including/ { sub(/^.*file: */, ""); gsub(/\\/, "/"); if (!match($$0, / /)) print "$@:", $$0 }'\'' > $(@:.o=.d)'
         _DEPFLAGS='$(CPPFLAGS) $(CFLAGS) -showIncludes -Zs'
         _cflags_speed="-O2"
@@ -7018,13 +7034,29 @@ print_enabled_components(){
     shift 3
     echo "static const $struct_name * const $name[] = {" > $TMPH
     for c in $*; do
-        enabled $c && printf "    &ff_%s,\n" $c >> $TMPH
+        if enabled $c; then
+            case $name in
+                indev_list)
+                    c=$(add_suffix _demuxer $(remove_suffix _indev $c))
+                ;;
+                outdev_list)
+                    c=$(add_suffix _muxer $(remove_suffix _outdev $c))
+                ;;
+            esac
+            printf "    &ff_%s,\n" $c >> $TMPH
+        fi
     done
     echo "    NULL };" >> $TMPH
     cp_if_changed $TMPH $file
 }
 
+print_enabled_components libavcodec/codec_list.c AVCodec codec_list $CODEC_LIST
+print_enabled_components libavcodec/parser_list.c AVCodecParser parser_list $PARSER_LIST
 print_enabled_components libavcodec/bsf_list.c AVBitStreamFilter bitstream_filters $BSF_LIST
+print_enabled_components libavdevice/indev_list.c AVInputFormat indev_list $INDEV_LIST
+print_enabled_components libavdevice/outdev_list.c AVOutputFormat outdev_list $OUTDEV_LIST
+print_enabled_components libavformat/demuxer_list.c AVInputFormat demuxer_list $DEMUXER_LIST
+print_enabled_components libavformat/muxer_list.c AVOutputFormat muxer_list $MUXER_LIST
 print_enabled_components libavformat/protocol_list.c URLProtocol url_protocols $PROTOCOL_LIST
 
 # Settings for pkg-config files
