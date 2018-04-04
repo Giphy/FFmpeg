@@ -750,6 +750,9 @@ static int parse_set_cookie(const char *set_cookie, AVDictionary **dict)
 {
     char *param, *next_param, *cstr, *back;
 
+    if (!set_cookie[0])
+        return 0;
+
     if (!(cstr = av_strdup(set_cookie)))
         return AVERROR(EINVAL);
 
@@ -757,6 +760,8 @@ static int parse_set_cookie(const char *set_cookie, AVDictionary **dict)
     back = &cstr[strlen(cstr)-1];
     while (strchr(WHITESPACES, *back)) {
         *back='\0';
+        if (back == cstr)
+            break;
         back--;
     }
 
@@ -802,7 +807,7 @@ static int parse_cookie(HTTPContext *s, const char *p, AVDictionary **cookies)
             // if the cookie has already expired ignore it
             if (av_timegm(&new_tm) < av_gettime() / 1000000) {
                 av_dict_free(&new_params);
-                return -1;
+                return 0;
             }
 
             // only replace an older cookie with the same name

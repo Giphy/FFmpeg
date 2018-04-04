@@ -62,6 +62,7 @@ static const AVOption options[] = {
     { "moov_size", "maximum moov size so it can be placed at the begin", offsetof(MOVMuxContext, reserved_moov_size), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, 0 },
     { "empty_moov", "Make the initial moov atom empty", 0, AV_OPT_TYPE_CONST, {.i64 = FF_MOV_FLAG_EMPTY_MOOV}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "movflags" },
     { "frag_keyframe", "Fragment at video keyframes", 0, AV_OPT_TYPE_CONST, {.i64 = FF_MOV_FLAG_FRAG_KEYFRAME}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "movflags" },
+    { "frag_every_frame", "Fragment at every frame", 0, AV_OPT_TYPE_CONST, {.i64 = FF_MOV_FLAG_FRAG_EVERY_FRAME}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "movflags" },
     { "separate_moof", "Write separate moof/mdat atoms for each track", 0, AV_OPT_TYPE_CONST, {.i64 = FF_MOV_FLAG_SEPARATE_MOOF}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "movflags" },
     { "frag_custom", "Flush fragments on caller requests", 0, AV_OPT_TYPE_CONST, {.i64 = FF_MOV_FLAG_FRAG_CUSTOM}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "movflags" },
     { "isml", "Create a live smooth streaming feed (for pushing to a publishing point)", 0, AV_OPT_TYPE_CONST, {.i64 = FF_MOV_FLAG_ISML}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "movflags" },
@@ -490,10 +491,7 @@ concatenate:
         if (info->num_blocks != 6)
             goto end;
         av_packet_unref(pkt);
-        ret = av_packet_ref(pkt, &info->pkt);
-        if (ret < 0)
-            goto end;
-        av_packet_unref(&info->pkt);
+        av_packet_move_ref(pkt, &info->pkt);
         info->num_blocks = 0;
     }
     ret = pkt->size;
@@ -3026,7 +3024,7 @@ static int mov_write_track_udta_tag(AVIOContext *pb, MOVMuxContext *mov,
     if (ret < 0)
         return ret;
 
-    if (mov->mode & MODE_MP4)
+    if (mov->mode & (MODE_MP4|MODE_MOV))
         mov_write_track_metadata(pb_buf, st, "name", "title");
 
     if ((size = avio_close_dyn_buf(pb_buf, &buf)) > 0) {
@@ -5432,7 +5430,8 @@ static int mov_write_single_packet(AVFormatContext *s, AVPacket *pkt)
              (mov->max_fragment_size && mov->mdat_size + size >= mov->max_fragment_size) ||
              (mov->flags & FF_MOV_FLAG_FRAG_KEYFRAME &&
               par->codec_type == AVMEDIA_TYPE_VIDEO &&
-              trk->entry && pkt->flags & AV_PKT_FLAG_KEY)) {
+              trk->entry && pkt->flags & AV_PKT_FLAG_KEY) ||
+              (mov->flags & FF_MOV_FLAG_FRAG_EVERY_FRAME)) {
             if (frag_duration >= mov->min_fragment_duration) {
                 // Set the duration of this track to line up with the next
                 // sample in this track. This avoids relying on AVPacket
@@ -5874,7 +5873,8 @@ static int mov_init(AVFormatContext *s)
     if (mov->max_fragment_duration || mov->max_fragment_size ||
         mov->flags & (FF_MOV_FLAG_EMPTY_MOOV |
                       FF_MOV_FLAG_FRAG_KEYFRAME |
-                      FF_MOV_FLAG_FRAG_CUSTOM))
+                      FF_MOV_FLAG_FRAG_CUSTOM |
+                      FF_MOV_FLAG_FRAG_EVERY_FRAME))
         mov->flags |= FF_MOV_FLAG_FRAGMENT;
 
     /* Set other implicit flags immediately */
@@ -6079,6 +6079,11 @@ static int mov_init(AVFormatContext *s)
                     av_log(s, AV_LOG_ERROR, "VP9 only supported in MP4.\n");
                     return AVERROR(EINVAL);
                 }
+            } else if (track->par->codec_id == AV_CODEC_ID_VP8) {
+                /* altref frames handling is not defined in the spec as of version v1.0,
+                 * so just forbid muxing VP8 streams altogether until a new version does */
+                av_log(s, AV_LOG_ERROR, "VP8 muxing is currently not supported.\n");
+                return AVERROR_PATCHWELCOME;
             }
         } else if (st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
             track->timescale = st->codecpar->sample_rate;
@@ -6233,7 +6238,8 @@ static int mov_write_header(AVFormatContext *s)
     if (mov->flags & FF_MOV_FLAG_FRAGMENT) {
         /* If no fragmentation options have been set, set a default. */
         if (!(mov->flags & (FF_MOV_FLAG_FRAG_KEYFRAME |
-                            FF_MOV_FLAG_FRAG_CUSTOM)) &&
+                            FF_MOV_FLAG_FRAG_CUSTOM |
+                            FF_MOV_FLAG_FRAG_EVERY_FRAME)) &&
             !mov->max_fragment_duration && !mov->max_fragment_size)
             mov->flags |= FF_MOV_FLAG_FRAG_KEYFRAME;
     } else {

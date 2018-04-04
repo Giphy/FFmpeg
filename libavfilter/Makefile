@@ -87,6 +87,7 @@ OBJS-$(CONFIG_COMPENSATIONDELAY_FILTER)      += af_compensationdelay.o
 OBJS-$(CONFIG_CROSSFEED_FILTER)              += af_crossfeed.o
 OBJS-$(CONFIG_CRYSTALIZER_FILTER)            += af_crystalizer.o
 OBJS-$(CONFIG_DCSHIFT_FILTER)                += af_dcshift.o
+OBJS-$(CONFIG_DRMETER_FILTER)                += af_drmeter.o
 OBJS-$(CONFIG_DYNAUDNORM_FILTER)             += af_dynaudnorm.o
 OBJS-$(CONFIG_EARWAX_FILTER)                 += af_earwax.o
 OBJS-$(CONFIG_EBUR128_FILTER)                += f_ebur128.o
@@ -138,6 +139,8 @@ OBJS-$(CONFIG_ALPHAMERGE_FILTER)             += vf_alphamerge.o
 OBJS-$(CONFIG_ASS_FILTER)                    += vf_subtitles.o
 OBJS-$(CONFIG_ATADENOISE_FILTER)             += vf_atadenoise.o
 OBJS-$(CONFIG_AVGBLUR_FILTER)                += vf_avgblur.o
+OBJS-$(CONFIG_AVGBLUR_OPENCL_FILTER)         += vf_avgblur_opencl.o opencl.o \
+                                                opencl/avgblur.o
 OBJS-$(CONFIG_BBOX_FILTER)                   += bbox.o vf_bbox.o
 OBJS-$(CONFIG_BENCH_FILTER)                  += f_bench.o
 OBJS-$(CONFIG_BITPLANENOISE_FILTER)          += vf_bitplanenoise.o
@@ -156,6 +159,8 @@ OBJS-$(CONFIG_COLORLEVELS_FILTER)            += vf_colorlevels.o
 OBJS-$(CONFIG_COLORMATRIX_FILTER)            += vf_colormatrix.o
 OBJS-$(CONFIG_COLORSPACE_FILTER)             += vf_colorspace.o colorspacedsp.o
 OBJS-$(CONFIG_CONVOLUTION_FILTER)            += vf_convolution.o
+OBJS-$(CONFIG_CONVOLUTION_OPENCL_FILTER)     += vf_convolution_opencl.o opencl.o \
+	                                        opencl/convolution.o
 OBJS-$(CONFIG_CONVOLVE_FILTER)               += vf_convolve.o framesync.o
 OBJS-$(CONFIG_COPY_FILTER)                   += vf_copy.o
 OBJS-$(CONFIG_COREIMAGE_FILTER)              += vf_coreimage.o

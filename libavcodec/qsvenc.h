@@ -46,10 +46,12 @@
 #define QSV_HAVE_LA_HRD QSV_VERSION_ATLEAST(1, 11)
 
 #if defined(_WIN32)
+#define QSV_HAVE_AVBR   QSV_VERSION_ATLEAST(1, 3)
 #define QSV_HAVE_ICQ    QSV_VERSION_ATLEAST(1, 8)
 #define QSV_HAVE_VCM    QSV_VERSION_ATLEAST(1, 8)
 #define QSV_HAVE_QVBR   QSV_VERSION_ATLEAST(1, 11)
 #else
+#define QSV_HAVE_AVBR   0
 #define QSV_HAVE_ICQ    0
 #define QSV_HAVE_VCM    0
 #define QSV_HAVE_QVBR   0
@@ -135,6 +137,8 @@ typedef struct QSVEncContext {
     int rdo;
     int max_frame_size;
     int max_slice_size;
+
+    int aud;
 
     int single_sei_nal_unit;
     int max_dec_frame_buffering;

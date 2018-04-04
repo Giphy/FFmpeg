@@ -116,6 +116,7 @@ static const struct {
     #if CONFIG_HEVC_DECODER
         { "hevc_add_res", checkasm_check_hevc_add_res },
         { "hevc_idct", checkasm_check_hevc_idct },
+        { "hevc_sao", checkasm_check_hevc_sao },
     #endif
     #if CONFIG_HUFFYUV_DECODER
         { "huffyuvdsp", checkasm_check_huffyuvdsp },
@@ -161,6 +162,9 @@ static const struct {
     #if CONFIG_THRESHOLD_FILTER
         { "vf_threshold", checkasm_check_vf_threshold },
     #endif
+#endif
+#if CONFIG_SWSCALE
+    { "sw_rgb", checkasm_check_sw_rgb },
 #endif
 #if CONFIG_AVUTIL
         { "fixed_dsp", checkasm_check_fixed_dsp },
