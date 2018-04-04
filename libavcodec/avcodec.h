@@ -1345,12 +1345,12 @@ enum AVPacketSideDataType {
     AV_PKT_DATA_A53_CC,
 
     /**
-<<<<<<< HEAD
      * The disposal method that should be used with the frame. If missing,
      * the frame will not be disposed. This contains exactly one byte.
      */
     AV_PKT_DATA_GIF_FRAME_DISPOSAL,
-=======
+
+    /**
      * This side data is encryption initialization data.
      * The format is not part of ABI, use av_encryption_init_info_* methods to
      * access.
@@ -1362,7 +1362,6 @@ enum AVPacketSideDataType {
      * The format is not part of ABI, use av_encryption_info_* methods to access.
      */
     AV_PKT_DATA_ENCRYPTION_INFO,
->>>>>>> upstream/master
 
     /**
      * The number of side data types.
