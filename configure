@@ -2016,6 +2016,7 @@ HEADERS_LIST="
     ES2_gl_h
     gsm_h
     io_h
+    linux_perf_event_h
     machine_ioctl_bt848_h
     machine_ioctl_meteor_h
     malloc_h
@@ -2141,10 +2142,10 @@ SYSTEM_FUNCS="
 "
 
 SYSTEM_LIBRARIES="
+    bcrypt
     vaapi_drm
     vaapi_x11
     vdpau_x11
-    wincrypt
 "
 
 TOOLCHAIN_FEATURES="
@@ -2371,6 +2372,7 @@ CMDLINE_SET="
     malloc_prefix
     nm
     optflags
+    nvcc
     nvccflags
     pkg_config
     pkg_config_flags
@@ -2478,6 +2480,7 @@ simd_align_32_if_any="avx"
 simd_align_64_if_any="avx512"
 
 # system capabilities
+linux_perf_deps="linux_perf_event_h"
 symver_if_any="symver_asm_label symver_gnu_asm"
 valgrind_backtrace_conflict="optimizations"
 valgrind_backtrace_deps="valgrind_valgrind_h"
@@ -3443,7 +3446,7 @@ avformat_deps="avcodec avutil"
 avformat_suggest="libm network zlib"
 avresample_deps="avutil"
 avresample_suggest="libm"
-avutil_suggest="clock_gettime ffnvcodec libm libdrm libmfx opencl user32 vaapi videotoolbox corefoundation corevideo coremedia wincrypt"
+avutil_suggest="clock_gettime ffnvcodec libm libdrm libmfx opencl user32 vaapi videotoolbox corefoundation corevideo coremedia bcrypt"
 postproc_deps="avutil gpl"
 postproc_suggest="libm"
 swresample_deps="avutil"
@@ -4337,7 +4340,7 @@ probe_cc(){
         _depflags='-MMD'
         _cflags_speed='-O3'
         _cflags_size='-Os'
-    elif $_cc -v 2>&1 | grep -q clang; then
+    elif $_cc -v 2>&1 | grep -q clang && ! $_cc -? > /dev/null 2>&1; then
         _type=clang
         _ident=$($_cc --version 2>/dev/null | head -n1)
         _depflags='-MMD -MF $(@:.o=.d) -MT $@'
@@ -4408,7 +4411,7 @@ probe_cc(){
         _flags_filter=msvc_flags
         _ld_lib='lib%.a'
         _ld_path='-libpath:'
-    elif $_cc -nologo- 2>&1 | grep -q Microsoft; then
+    elif $_cc -nologo- 2>&1 | grep -q Microsoft || $_cc -v 2>&1 | grep -q clang && $_cc -? > /dev/null 2>&1; then
         _type=msvc
         _ident=$($_cc 2>&1 | head -n1 | tr -d '\r')
         _DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< 2>&1 | awk '\''/including/ { sub(/^.*file: */, ""); gsub(/\\/, "/"); if (!match($$0, / /)) print "$@:", $$0 }'\'' > $(@:.o=.d)'
@@ -5007,6 +5010,7 @@ case $target_os in
         add_cppflags '-I\$(SRC_PATH)/compat/aix'
         enabled shared && add_ldflags -Wl,-brtl
         arflags='-Xany -r -c'
+        striptype=""
         ;;
     android)
         disable symver
@@ -5045,6 +5049,7 @@ case $target_os in
         ;;
     openbsd|bitrig)
         disable symver
+        striptype=""
         SHFLAGS='-shared'
         SLIB_INSTALL_NAME='$(SLIBNAME).$(LIBMAJOR).$(LIBMINOR)'
         SLIB_INSTALL_LINKS=
@@ -5800,6 +5805,7 @@ check_header dxgidebug.h
 check_header dxva.h
 check_header dxva2api.h -D_WIN32_WINNT=0x0600
 check_header io.h
+check_header linux/perf_event.h
 check_header libcrystalhd/libcrystalhd_if.h
 check_header malloc.h
 check_header net/udplite.h
@@ -5820,12 +5826,13 @@ check_header asm/types.h
 # it seems there are versions of clang in some distros that try to use the
 # gcc headers, which explodes for stdatomic
 # so we also check that atomics actually work here
-check_builtin stdatomic stdatomic.h "atomic_int foo, bar = ATOMIC_VAR_INIT(-1); atomic_store(&foo, 0)"
+check_builtin stdatomic stdatomic.h "atomic_int foo, bar = ATOMIC_VAR_INIT(-1); atomic_store(&foo, 0); foo += bar"
 
 check_lib advapi32 "windows.h"            RegCloseKey          -ladvapi32
+check_lib bcrypt   "windows.h bcrypt.h"   BCryptGenRandom      -lbcrypt &&
+    check_cpp_condition bcrypt bcrypt.h "defined BCRYPT_RNG_ALGORITHM"
 check_lib ole32    "windows.h"            CoTaskMemFree        -lole32
 check_lib shell32  "windows.h shellapi.h" CommandLineToArgvW   -lshell32
-check_lib wincrypt "windows.h wincrypt.h" CryptGenRandom       -ladvapi32
 check_lib psapi    "windows.h psapi.h"    GetProcessMemoryInfo -lpsapi
 
 check_lib android android/native_window.h ANativeWindow_acquire -landroid
@@ -5883,6 +5890,7 @@ check_cpp_condition winrt windows.h "!WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_D
 if ! disabled w32threads && ! enabled pthreads; then
     check_func_headers "windows.h process.h" _beginthreadex &&
         check_type "windows.h" CONDITION_VARIABLE &&
+        check_type "windows.h" INIT_ONCE &&
         enable w32threads || disable w32threads
     if ! enabled w32threads && enabled winrt; then
         check_func_headers "windows.h" CreateThread &&

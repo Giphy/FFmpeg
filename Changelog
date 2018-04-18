@@ -52,6 +52,8 @@ version <next>:
 - E-AC-3 dependent frames support
 - bitstream filter for extracting E-AC-3 core
 - Haivision SRT protocol via libsrt
+- segafilm muxer
+- vfrdet filter
 
 
 version 3.4:

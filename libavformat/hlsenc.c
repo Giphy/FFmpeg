@@ -75,6 +75,7 @@ typedef struct HLSSegment {
     int discont;
     int64_t pos;
     int64_t size;
+    unsigned var_stream_idx;
 
     char key_uri[LINE_BUFFER_SIZE + 1];
     char iv_string[KEYSIZE*2 + 1];
@@ -106,6 +107,7 @@ typedef enum {
 } SegmentType;
 
 typedef struct VariantStream {
+    unsigned var_stream_idx;
     unsigned number;
     int64_t sequence;
     AVOutputFormat *oformat;
@@ -171,6 +173,7 @@ typedef struct HLSContext {
     float time;            // Set by a private option.
     float init_time;       // Set by a private option.
     int max_nb_segments;   // Set by a private option.
+    int hls_delete_threshold; // Set by a private option.
 #if FF_API_HLS_WRAP
     int  wrap;             // Set by a private option.
 #endif
@@ -443,6 +446,7 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
     HLSSegment *segment, *previous_segment = NULL;
     float playlist_duration = 0.0f;
     int ret = 0, path_size, sub_path_size;
+    int segment_cnt = 0;
     char *dirname = NULL, *p, *sub_path;
     char *path = NULL;
     AVDictionary *options = NULL;
@@ -456,11 +460,17 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
     }
 
     segment = vs->old_segments;
+    segment_cnt = 0;
     while (segment) {
         playlist_duration -= segment->duration;
         previous_segment = segment;
         segment = previous_segment->next;
+        segment_cnt++;
         if (playlist_duration <= -previous_segment->duration) {
+            previous_segment->next = NULL;
+            break;
+        }
+        if (segment_cnt >= hls->hls_delete_threshold) {
             previous_segment->next = NULL;
             break;
         }
@@ -478,9 +488,23 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
         }
         p = (char *)av_basename(dirname);
         *p = '\0';
+
     }
 
     while (segment) {
+        char * r_dirname = dirname;
+
+        /* if %v is present in the file's directory */
+        if (av_stristr(dirname, "%v")) {
+
+            if (replace_int_data_in_filename(&r_dirname, dirname, 'v', segment->var_stream_idx) < 1) {
+                ret = AVERROR(EINVAL);
+                goto fail;
+            }
+            av_free(dirname);
+            dirname = r_dirname;
+        }
+
         av_log(hls, AV_LOG_DEBUG, "deleting old segment %s\n",
                                   segment->filename);
         path_size =  (hls->use_localtime_mkdir ? 0 : strlen(dirname)) + strlen(segment->filename) + 1;
@@ -678,14 +702,6 @@ static int hls_encryption_start(AVFormatContext *s)
     ff_data_to_hex(hls->key_string, key, sizeof(key), 0);
 
     return 0;
-}
-
-static int read_chomp_line(AVIOContext *s, char *buf, int maxlen)
-{
-    int len = ff_get_line(s, buf, maxlen);
-    while (len > 0 && av_isspace(buf[len - 1]))
-        buf[--len] = '\0';
-    return len;
 }
 
 static int hls_mux_init(AVFormatContext *s, VariantStream *vs)
@@ -965,6 +981,7 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
     if (!en)
         return AVERROR(ENOMEM);
 
+    en->var_stream_idx = vs->var_stream_idx;
     ret = sls_flags_filename_process(s, hls, vs, en, duration, pos, size);
     if (ret < 0) {
         return ret;
@@ -1055,7 +1072,7 @@ static int parse_playlist(AVFormatContext *s, const char *url, VariantStream *vs
                                    s->protocol_whitelist, s->protocol_blacklist)) < 0)
         return ret;
 
-    read_chomp_line(in, line, sizeof(line));
+    ff_get_chomp_line(in, line, sizeof(line));
     if (strcmp(line, "#EXTM3U")) {
         ret = AVERROR_INVALIDDATA;
         goto fail;
@@ -1063,7 +1080,7 @@ static int parse_playlist(AVFormatContext *s, const char *url, VariantStream *vs
 
     vs->discontinuity = 0;
     while (!avio_feof(in)) {
-        read_chomp_line(in, line, sizeof(line));
+        ff_get_chomp_line(in, line, sizeof(line));
         if (av_strstart(line, "#EXT-X-MEDIA-SEQUENCE:", &ptr)) {
             int64_t tmp_sequence = strtoll(ptr, NULL, 10);
             if (tmp_sequence < vs->sequence)
@@ -1574,9 +1591,14 @@ static int hls_start(AVFormatContext *s, VariantStream *vs)
     }
 
     if (c->key_info_file || c->encrypt) {
+        if (c->segment_type == SEGMENT_TYPE_FMP4) {
+            av_log(s, AV_LOG_ERROR, "Encrypted fmp4 not yet supported\n");
+            return AVERROR_PATCHWELCOME;
+        }
+
         if (c->key_info_file && c->encrypt) {
             av_log(s, AV_LOG_WARNING, "Cannot use both -hls_key_info_file and -hls_enc,"
-                  " will use -hls_key_info_file priority\n");
+                  " ignoring -hls_enc\n");
         }
 
         if (!c->encrypt_started || (c->flags & HLS_PERIODIC_REKEY)) {
@@ -1824,9 +1846,11 @@ static int parse_variant_stream_mapstring(AVFormatContext *s)
     while (varstr = av_strtok(p, " \t", &saveptr1)) {
         p = NULL;
 
-        if (nb_varstreams < hls->nb_varstreams)
-            vs = &(hls->var_streams[nb_varstreams++]);
-        else
+        if (nb_varstreams < hls->nb_varstreams) {
+            vs = &(hls->var_streams[nb_varstreams]);
+            vs->var_stream_idx = nb_varstreams;
+            nb_varstreams++;
+        } else
             return AVERROR(EINVAL);
 
         q = varstr;
@@ -1984,6 +2008,7 @@ static int update_variant_stream_info(AVFormatContext *s) {
         if (!hls->var_streams)
             return AVERROR(ENOMEM);
 
+        hls->var_streams[0].var_stream_idx = 0;
         hls->var_streams[0].nb_streams = s->nb_streams;
         hls->var_streams[0].streams = av_mallocz(sizeof(AVStream *) *
                                             hls->var_streams[0].nb_streams);
@@ -2779,6 +2804,7 @@ static const AVOption options[] = {
     {"hls_time",      "set segment length in seconds",           OFFSET(time),    AV_OPT_TYPE_FLOAT,  {.dbl = 2},     0, FLT_MAX, E},
     {"hls_init_time", "set segment length in seconds at init list",           OFFSET(init_time),    AV_OPT_TYPE_FLOAT,  {.dbl = 0},     0, FLT_MAX, E},
     {"hls_list_size", "set maximum number of playlist entries",  OFFSET(max_nb_segments),    AV_OPT_TYPE_INT,    {.i64 = 5},     0, INT_MAX, E},
+    {"hls_delete_threshold", "set number of unreferenced segments to keep before deleting",  OFFSET(hls_delete_threshold),    AV_OPT_TYPE_INT,    {.i64 = 1},     1, INT_MAX, E},
     {"hls_ts_options","set hls mpegts list of options for the container format used for hls", OFFSET(format_options_str), AV_OPT_TYPE_STRING, {.str = NULL},  0, 0,    E},
     {"hls_vtt_options","set hls vtt list of options for the container format used for hls", OFFSET(vtt_format_options_str), AV_OPT_TYPE_STRING, {.str = NULL},  0, 0,    E},
 #if FF_API_HLS_WRAP
