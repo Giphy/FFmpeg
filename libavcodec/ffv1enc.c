@@ -539,6 +539,10 @@ static av_cold int encode_init(AVCodecContext *avctx)
         s->ec = (s->version >= 3);
     }
 
+    // CRC requires version 3+
+    if (s->ec)
+        s->version = FFMAX(s->version, 3);
+
     if ((s->version == 2 || s->version>3) && avctx->strict_std_compliance > FF_COMPLIANCE_EXPERIMENTAL) {
         av_log(avctx, AV_LOG_ERROR, "Version 2 needed for requested features but version 2 is experimental and not enabled\n");
         return AVERROR_INVALIDDATA;
@@ -620,7 +624,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     case AV_PIX_FMT_YUVA420P:
         s->chroma_planes = desc->nb_components < 3 ? 0 : 1;
         s->colorspace = 0;
-        s->transparency = desc->nb_components == 4 || desc->nb_components == 2;
+        s->transparency = !!(desc->flags & AV_PIX_FMT_FLAG_ALPHA);
         if (!avctx->bits_per_raw_sample && !s->bits_per_raw_sample)
             s->bits_per_raw_sample = 8;
         else if (!s->bits_per_raw_sample)
@@ -672,7 +676,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
             s->bits_per_raw_sample = 16;
         else if (!s->bits_per_raw_sample)
             s->bits_per_raw_sample = avctx->bits_per_raw_sample;
-        s->transparency = desc->nb_components == 4 || desc->nb_components == 2;
+        s->transparency = !!(desc->flags & AV_PIX_FMT_FLAG_ALPHA);
         s->colorspace = 1;
         s->chroma_planes = 1;
         if (s->bits_per_raw_sample >= 16) {

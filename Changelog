@@ -2,6 +2,16 @@ Entries are sorted chronologically from oldest to youngest within each release,
 releases are sorted from youngest to oldest.
 
 version <next>:
+- deblock filter
+- tmix filter
+- amplify filter
+- fftdnoiz filter
+- aderivative and aintegral audio filters
+- pal75bars and pal100bars video filter sources
+- support mbedTLS based TLS
+
+
+version 4.0:
 - Bitstream filters for editing metadata in H.264, HEVC and MPEG-2 streams
 - Dropped support for OpenJPEG versions 2.0 and below. Using OpenJPEG now
   requires 2.1 (or later) and pkg-config.
@@ -54,6 +64,7 @@ version <next>:
 - Haivision SRT protocol via libsrt
 - segafilm muxer
 - vfrdet filter
+- SRCNN filter
 
 
 version 3.4:
