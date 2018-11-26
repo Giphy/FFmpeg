@@ -309,7 +309,7 @@ static int gif_image_write_translucent(AVCodecContext *avctx,
   DONE_CROP_LEFT:
 
         // crop right
-        while (x_end < w) {
+        while (x_end > x_start) {
             int i;
             for (i=y_start; i<y_end; ++i) {
                 if (buf[linesize*i+x_end] != trans) {
