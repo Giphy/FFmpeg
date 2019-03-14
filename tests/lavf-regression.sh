@@ -24,8 +24,9 @@ do_lavf_fate()
 do_lavf()
 {
     file=${outfile}lavf.$1
-    do_avconv $file $DEC_OPTS -f image2 -vcodec pgmyuv -i $raw_src $DEC_OPTS -ar 44100 -f s16le $2 -i $pcm_src $ENC_OPTS -b:a 64k -t 1 -qscale:v 10 $3
-    do_avconv_crc $file $DEC_OPTS -i $target_path/$file $4
+    do_avconv $file $DEC_OPTS -f image2 -c:v pgmyuv -i $raw_src $DEC_OPTS -ar 44100 -f s16le $2 -i $pcm_src $ENC_OPTS -b:a 64k -t 1 -qscale:v 10 $3
+    test $5 = "disable_crc" ||
+        do_avconv_crc $file $DEC_OPTS -i $target_path/$file $4
 }
 
 do_lavf_timecode_nodrop() { do_lavf $1 "" "$2 -timecode 02:56:14:13"; }
@@ -73,9 +74,8 @@ fi
 
 if [ -n "$do_rm" ] ; then
 file=${outfile}lavf.rm
-do_avconv $file $DEC_OPTS -f image2 -vcodec pgmyuv -i $raw_src $DEC_OPTS -ar 44100 -f s16le -i $pcm_src $ENC_OPTS -t 1 -qscale 10 -acodec ac3_fixed -ab 64k
-# broken
-#do_avconv_crc $file -i $target_path/$file
+# The RealMedia muxer is broken.
+do_lavf rm "" "-c:a ac3_fixed" "" disable_crc
 fi
 
 if [ -n "$do_mpg" ] ; then
@@ -235,7 +235,7 @@ fi
 if [ -n "$do_yuv4mpeg" ] ; then
 file=${outfile}lavf.y4m
 do_avconv $file $DEC_OPTS -f image2 -vcodec pgmyuv -i $raw_src $ENC_OPTS -t 1 -qscale 10
-#do_avconv_crc $file -i $target_path/$file
+do_avconv_crc $file -i $target_path/$file
 fi
 
 if [ -n "$do_fits" ] ; then
@@ -411,7 +411,6 @@ fi
 
 if [ -n "$do_pixfmt" ] ; then
 outfile="$datadir/pixfmt/"
-mkdir -p "$outfile"
 conversions="yuv420p yuv422p yuv444p yuyv422 yuv410p yuv411p yuvj420p \
              yuvj422p yuvj444p rgb24 bgr24 rgb32 rgb565 rgb555 gray monow \
              monob yuv440p yuvj440p"
