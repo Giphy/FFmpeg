@@ -441,6 +441,7 @@ extern AVOutputFormat ff_webm_muxer;
 extern AVInputFormat  ff_webm_dash_manifest_demuxer;
 extern AVOutputFormat ff_webm_dash_manifest_muxer;
 extern AVOutputFormat ff_webm_chunk_muxer;
+extern AVInputFormat  ff_webp_demuxer;
 extern AVOutputFormat ff_webp_muxer;
 extern AVInputFormat  ff_webvtt_demuxer;
 extern AVOutputFormat ff_webvtt_muxer;
@@ -483,7 +484,6 @@ extern AVInputFormat  ff_image_sgi_pipe_demuxer;
 extern AVInputFormat  ff_image_svg_pipe_demuxer;
 extern AVInputFormat  ff_image_sunrast_pipe_demuxer;
 extern AVInputFormat  ff_image_tiff_pipe_demuxer;
-extern AVInputFormat  ff_image_webp_pipe_demuxer;
 extern AVInputFormat  ff_image_xpm_pipe_demuxer;
 extern AVInputFormat  ff_image_xwd_pipe_demuxer;
 

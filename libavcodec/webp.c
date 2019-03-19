@@ -1386,22 +1386,22 @@ static int webp_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     s->has_iccp  = 0;
     bytestream2_init(&gb, avpkt->data, avpkt->size);
 
-    if (bytestream2_get_bytes_left(&gb) < 12)
+    if (bytestream2_get_bytes_left(&gb) < 8)
         return AVERROR_INVALIDDATA;
 
-    if (bytestream2_get_le32(&gb) != MKTAG('R', 'I', 'F', 'F')) {
-        av_log(avctx, AV_LOG_ERROR, "missing RIFF tag\n");
-        return AVERROR_INVALIDDATA;
-    }
+    // if (bytestream2_get_le32(&gb) != MKTAG('R', 'I', 'F', 'F')) {
+    //     av_log(avctx, AV_LOG_ERROR, "missing RIFF tag\n");
+    //     return AVERROR_INVALIDDATA;
+    // }
 
-    chunk_size = bytestream2_get_le32(&gb);
-    if (bytestream2_get_bytes_left(&gb) < chunk_size)
-        return AVERROR_INVALIDDATA;
+    // chunk_size = bytestream2_get_le32(&gb);
+    // if (bytestream2_get_bytes_left(&gb) < chunk_size)
+    //     return AVERROR_INVALIDDATA;
 
-    if (bytestream2_get_le32(&gb) != MKTAG('W', 'E', 'B', 'P')) {
-        av_log(avctx, AV_LOG_ERROR, "missing WEBP tag\n");
-        return AVERROR_INVALIDDATA;
-    }
+    // if (bytestream2_get_le32(&gb) != MKTAG('W', 'E', 'B', 'P')) {
+    //     av_log(avctx, AV_LOG_ERROR, "missing WEBP tag\n");
+    //     return AVERROR_INVALIDDATA;
+    // }
 
     while (bytestream2_get_bytes_left(&gb) > 8) {
         char chunk_str[5] = { 0 };
@@ -1538,8 +1538,16 @@ exif_end:
             bytestream2_get_buffer(&gb, sd->data, chunk_size);
             break;
         }
+        case MKTAG('A', 'N', 'M', 'F'): {
+            unsigned int frame_x = bytestream2_get_le24u(&gb);
+            unsigned int frame_y = bytestream2_get_le24u(&gb);
+            unsigned int frame_w = bytestream2_get_le24u(&gb) + 1;
+            unsigned int frame_h = bytestream2_get_le24u(&gb) + 1;
+            unsigned int frame_duration = bytestream2_get_le24u(&gb);
+            unsigned int reserved = bytestream2_get_byte(&gb);
+            break;
+        }
         case MKTAG('A', 'N', 'I', 'M'):
-        case MKTAG('A', 'N', 'M', 'F'):
         case MKTAG('X', 'M', 'P', ' '):
             AV_WL32(chunk_str, chunk_type);
             av_log(avctx, AV_LOG_WARNING, "skipping unsupported chunk: %s\n",
