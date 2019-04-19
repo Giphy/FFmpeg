@@ -125,6 +125,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
     GIFContext *s = avctx->priv_data;
     int trans = s->transparent_index;
 
+    av_log(avctx, AV_LOG_DEBUG,"avctx frame: %d\n", avctx->frame_number);
     /* Crop image */
     if ((s->flags & GF_OFFSETTING) && trans >= 0) {
         const int w = avctx->width;
@@ -144,11 +145,13 @@ static void gif_crop_translucent(AVCodecContext *avctx,
 
             if (!is_trans)
                 break;
+            // av_log(avctx, AV_LOG_DEBUG,"crop top: %dx%d image at pos (%d;%d) [area:%dx%d]\n",
+            //    *width, *height, *x_start, *y_start, avctx->width, avctx->height);
             (*y_start)++;
         }
 
         // crop bottom
-        while (y_end < h) {
+        while (y_end > *y_start) {
             int is_trans = 1;
             for (int i = 0; i < w; i++) {
                 if (buf[w * y_end + i] != trans) {
@@ -158,6 +161,8 @@ static void gif_crop_translucent(AVCodecContext *avctx,
             }
             if (!is_trans)
                 break;
+            // av_log(avctx, AV_LOG_DEBUG,"crop bottom: %dx%d image at pos (%d;%d) [area:%dx%d]\n",
+            //    *width, *height, *x_start, *y_start, avctx->width, avctx->height);
             y_end--;
         }
 
@@ -172,11 +177,13 @@ static void gif_crop_translucent(AVCodecContext *avctx,
             }
             if (!is_trans)
                 break;
+            // av_log(avctx, AV_LOG_DEBUG,"crop left: %dx%d image at pos (%d;%d) [area:%dx%d]\n",
+            //    *width, *height, *x_start, *y_start, avctx->width, avctx->height);
             (*x_start)++;
         }
 
         // crop right
-        while (x_end < w) {
+        while (x_end > x_start) {
             int is_trans = 1;
             for (int i = *y_start; i < y_end; i++) {
                 if (buf[w * i + x_end] != trans) {
@@ -186,11 +193,17 @@ static void gif_crop_translucent(AVCodecContext *avctx,
             }
             if (!is_trans)
                 break;
+            // av_log(avctx, AV_LOG_DEBUG,"crop right: %dx%d image at pos (%d;%d) [area:%dx%d]\n",
+            //    *width, *height, *x_start, *y_start, avctx->width, avctx->height);
             x_end--;
         }
 
         *height = y_end + 1 - *y_start;
         *width  = x_end + 1 - *x_start;
+        // if (*width == 1 && *height == 1) {
+        //     *x_start = 0;
+        //     *y_start = 0;
+        // }
         av_log(avctx, AV_LOG_DEBUG,"%dx%d image at pos (%d;%d) [area:%dx%d]\n",
                *width, *height, *x_start, *y_start, avctx->width, avctx->height);
     }
@@ -343,11 +356,13 @@ static int gif_image_write_image(AVCodecContext *avctx,
 
     bytestream_put_byte(bytestream, 0x08);
 
+    // av_log(avctx, AV_LOG_DEBUG, "frame: %d buf_size: %d\n", avctx->frame_number, s->buf_size);
     ff_lzw_encode_init(s->lzw, s->buf, s->buf_size,
                        12, FF_LZW_GIF, put_bits);
 
     ptr = buf + y_start*linesize + x_start;
     if (honor_transparency) {
+        av_log(avctx, AV_LOG_DEBUG, "frame: %d honoring transparency\n", avctx->frame_number);
         const int ref_linesize = s->last_frame->linesize[0];
         const uint8_t *ref = s->last_frame->data[0] + y_start*ref_linesize + x_start;
 
@@ -361,9 +376,13 @@ static int gif_image_write_image(AVCodecContext *avctx,
             ref += ref_linesize;
         }
     } else {
+        av_log(avctx, AV_LOG_DEBUG, "frame: %d not honoring transparency\n", avctx->frame_number);
+        av_log(avctx, AV_LOG_DEBUG, "frame: %d lzw encoding image of height: %d\n", avctx->frame_number, height);
         for (y = 0; y < height; y++) {
             len += ff_lzw_encode(s->lzw, ptr, width);
+            av_log(avctx, AV_LOG_DEBUG, "frame: %d lzw encoding image of width: %d\n", avctx->frame_number, width);
             ptr += linesize;
+            av_log(avctx, AV_LOG_DEBUG, "frame: %d wrote linesize: %d\n", avctx->frame_number, linesize);
         }
     }
     len += ff_lzw_encode_flush(s->lzw, flush_put_bits);
