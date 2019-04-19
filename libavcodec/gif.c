@@ -183,7 +183,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
         }
 
         // crop right
-        while (x_end > x_start) {
+        while (x_end > *x_start) {
             int is_trans = 1;
             for (int i = *y_start; i < y_end; i++) {
                 if (buf[w * i + x_end] != trans) {
