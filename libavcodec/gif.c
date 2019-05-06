@@ -126,6 +126,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
     int trans = s->transparent_index;
 
     av_log(avctx, AV_LOG_DEBUG,"avctx frame: %d\n", avctx->frame_number);
+
     /* Crop image */
     if ((s->flags & GF_OFFSETTING) && trans >= 0) {
         const int w = avctx->width;
@@ -136,7 +137,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
         // crop top
         while (*y_start < y_end) {
             int is_trans = 1;
-            for (int i = 0; i < w; i++) {
+            for (int i = 0; i < linesize; i++) {
                 if (buf[linesize * *y_start + i] != trans) {
                     is_trans = 0;
                     break;
@@ -153,7 +154,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
         // crop bottom
         while (y_end > *y_start) {
             int is_trans = 1;
-            for (int i = 0; i < w; i++) {
+            for (int i = 0; i < linesize; i++) {
                 if (buf[linesize * y_end + i] != trans) {
                     is_trans = 0;
                     break;
@@ -200,10 +201,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
 
         *height = y_end + 1 - *y_start;
         *width  = x_end + 1 - *x_start;
-        // if (*width == 1 && *height == 1) {
-        //     *x_start = 0;
-        //     *y_start = 0;
-        // }
+
         av_log(avctx, AV_LOG_DEBUG,"%dx%d image at pos (%d;%d) [area:%dx%d]\n",
                *width, *height, *x_start, *y_start, avctx->width, avctx->height);
     }
