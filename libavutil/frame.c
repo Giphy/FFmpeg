@@ -453,6 +453,7 @@ int av_frame_ref(AVFrame *dst, const AVFrame *src)
     dst->channels       = src->channels;
     dst->channel_layout = src->channel_layout;
     dst->nb_samples     = src->nb_samples;
+    dst->pkt_duration   = src->pkt_duration;
 
     ret = frame_copy_props(dst, src, 0);
     if (ret < 0)

@@ -847,7 +847,6 @@ static void output_packet(OutputFile *of, AVPacket *pkt,
                           OutputStream *ost, int eof)
 {
     int ret = 0;
-
     /* apply the output bitstream filters, if any */
     if (ost->nb_bitstream_filters) {
         int idx;
@@ -1291,6 +1290,8 @@ static void do_video_out(OutputFile *of,
 
         while (1) {
             ret = avcodec_receive_packet(enc, &pkt);
+            if (pkt.duration == AV_NOPTS_VALUE || pkt.duration <= 0)
+                pkt.duration = av_rescale_q(in_picture->pkt_duration, ost->mux_timebase, enc->time_base);
             update_benchmark("encode_video %d.%d", ost->file_index, ost->index);
             if (ret == AVERROR(EAGAIN))
                 break;
