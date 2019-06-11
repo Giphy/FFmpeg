@@ -84,7 +84,15 @@ static int gif_parse_packet(AVFormatContext *s, uint8_t *data, int size)
 
 static int gif_get_delay(GIFContext *gif, AVPacket *prev, AVPacket *new)
 {
-    return prev->duration;
+	if (new && new->pts != AV_NOPTS_VALUE)
+        gif->duration = av_clip_uint16(new->pts - prev->pts);
+    else if (!new && gif->last_delay >= 0)
+        gif->duration = gif->last_delay;
+    else {
+        gif->duration = prev->duration;
+    }
+
+    return gif->duration;
 }
 
 static int gif_write_packet(AVFormatContext *s, AVPacket *new_pkt)
