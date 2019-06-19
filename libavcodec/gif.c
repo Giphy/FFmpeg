@@ -136,7 +136,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
         while (*y_start < y_end) {
             int is_trans = 1;
             for (int i = 0; i < w; i++) {
-                if (buf[w * *y_start + i] != trans) {
+                if (buf[linesize * *y_start + i] != trans) {
                     is_trans = 0;
                     break;
                 }
@@ -148,10 +148,10 @@ static void gif_crop_translucent(AVCodecContext *avctx,
         }
 
         // crop bottom
-        while (y_end < h) {
+        while (y_end > *y_start) {
             int is_trans = 1;
             for (int i = 0; i < w; i++) {
-                if (buf[w * y_end + i] != trans) {
+                if (buf[linesize * y_end + i] != trans) {
                     is_trans = 0;
                     break;
                 }
@@ -165,7 +165,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
         while (*x_start < x_end) {
             int is_trans = 1;
             for (int i = *y_start; i < y_end; i++) {
-                if (buf[w * i + *x_start] != trans) {
+                if (buf[linesize * i + *x_start] != trans) {
                     is_trans = 0;
                     break;
                 }
@@ -176,10 +176,10 @@ static void gif_crop_translucent(AVCodecContext *avctx,
         }
 
         // crop right
-        while (x_end < w) {
+        while (x_end > *x_start) {
             int is_trans = 1;
             for (int i = *y_start; i < y_end; i++) {
-                if (buf[w * i + x_end] != trans) {
+                if (buf[linesize * i + x_end] != trans) {
                     is_trans = 0;
                     break;
                 }
@@ -191,6 +191,7 @@ static void gif_crop_translucent(AVCodecContext *avctx,
 
         *height = y_end + 1 - *y_start;
         *width  = x_end + 1 - *x_start;
+
         av_log(avctx, AV_LOG_DEBUG,"%dx%d image at pos (%d;%d) [area:%dx%d]\n",
                *width, *height, *x_start, *y_start, avctx->width, avctx->height);
     }
@@ -267,7 +268,7 @@ static int gif_image_write_image(AVCodecContext *avctx,
     int bcid = -1, honor_transparency = (s->flags & GF_TRANSDIFF) && s->last_frame && !palette;
     const uint8_t *ptr;
 
-    if (!s->image && avctx->frame_number && is_image_translucent(avctx, buf, linesize)) {
+    if (!s->image && is_image_translucent(avctx, buf, linesize)) {
         gif_crop_translucent(avctx, buf, linesize, &width, &height, &x_start, &y_start);
         honor_transparency = 0;
         disposal = GCE_DISPOSAL_BACKGROUND;
